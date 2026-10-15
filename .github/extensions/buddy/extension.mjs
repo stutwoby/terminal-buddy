@@ -1,5 +1,9 @@
 import { joinSession } from "@github/copilot-sdk/extension";
-import { loadBuddy, readMood, renderBuddy, saveBuddy, setMood } from "../../../buddy.mjs";
+import { interact, readMood, renderBuddy, setMood } from "../../../buddy.mjs";
+
+function characterCard(buddy, mood) {
+  return "```text\n" + renderBuddy(buddy, { mood, card: true }) + "\n```";
+}
 
 function moodHook(mood) {
   return async (_input, invocation) => {
@@ -8,26 +12,31 @@ function moodHook(mood) {
 }
 
 const session = await joinSession({
+  commands: [{
+    name: "buddy",
+    description: "Your RPG buddy: show, pet, reward (cookie), reseed, motion on/off",
+    handler: async ({ args, sessionId }) => {
+      const action = (args.trim() || "show").replace(/^motion\s+(on|off)$/, "motion-$1");
+      try {
+        const { buddy, mood } = interact(action, undefined, sessionId);
+        await session.log(characterCard(buddy, mood));
+      } catch (error) {
+        await session.log(`Buddy: ${error.message}`, { level: "error" });
+      }
+    },
+  }],
   tools: [{
     name: "terminal_buddy",
-    description: "Show or pet the user's saved ASCII RPG buddy, or turn its status-line motion on/off. No AI calls or external services.",
+    description: "Show, pet, or reward the user's saved ASCII RPG buddy with a cookie, reseed it, or toggle motion. No external services.",
     parameters: {
       type: "object",
-      properties: { action: { type: "string", enum: ["show", "pet", "motion-on", "motion-off"] } },
+      properties: { action: { type: "string", enum: ["show", "pet", "reward", "reseed", "motion-on", "motion-off"] } },
       required: ["action"],
       additionalProperties: false,
     },
     handler: async ({ action }, invocation) => {
-      if (!["show", "pet", "motion-on", "motion-off"].includes(action)) {
-        throw new Error("Unknown Buddy action.");
-      }
-      const buddy = loadBuddy();
-      if (action.startsWith("motion-")) {
-        buddy.motion = action === "motion-on";
-        saveBuddy(buddy);
-      }
-      if (action === "pet") setMood(invocation.sessionId, "pet");
-      return renderBuddy(buddy, { mood: action === "pet" ? "pet" : "idle", card: true });
+      const { buddy, mood } = interact(action, undefined, invocation.sessionId);
+      return characterCard(buddy, mood);
     },
   }],
   hooks: {

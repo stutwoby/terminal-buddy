@@ -1,21 +1,18 @@
 # Terminal Buddy
 
-A tiny, original ASCII blob that lives in **Copilot CLI's custom status line**.
-It is blue and wears a top hat and monocle, complete with a dangling chain.
-It hatches with a random name, rarity, class, personality, and five RPG stats.
-Its character survives restarts; moods react to Copilot tool activity. No packages,
-network requests, or extra model calls.
+An ASCII RPG companion in **Copilot CLI's custom status line**, with seeded color, blinking,
+bouncing, personality, cookies, and reactions to tool activity. No dependencies,
+network requests, or model calls for character generation or interactions.
 
 ## Use
 
-Requires Node.js 22+ and a Copilot CLI version supporting `statusLine.command`,
-`statusLine.refreshInterval`, and project extensions. No dependency installation
-is necessary.
+Requires Node.js 22+ and a Copilot CLI version supporting custom status lines and
+SDK extension slash commands (developed against 1.0.98).
 
 Copilot only permits executable status lines in **user settings**, not repository
-settings. The command is also protected from `copilot config` writes. Edit
-`~/.copilot/settings.json` (or `$COPILOT_HOME/settings.json`) and merge these keys
-into the existing object, using your absolute script path:
+settings. The command is also protected from `copilot config` writes. Merge these
+keys into `~/.copilot/settings.json` (or `$COPILOT_HOME/settings.json`), using your
+absolute script path:
 
 ```json
 {
@@ -30,73 +27,130 @@ into the existing object, using your absolute script path:
 }
 ```
 
-If you already have a custom status-line command, save it first: this replaces
-that one custom slot. Buddy's command emits nothing outside this project and its
-subdirectories, so the pet remains project-scoped.
+This replaces Copilot's one custom status-line slot; preserve any previous command.
+Buddy emits nothing outside this project and its subdirectories.
 
-In a **new** session, approve the `project:buddy` extension's request to register
-activity hooks. Declining leaves the animated pet working but disables tool
-reactions and the Buddy tool. If hidden, run `/statusline` and enable the
-**custom** item. Ask Copilot to **"show my buddy"**, **"pet my buddy"**, or
-**"turn buddy motion off"** to use the extension.
+Start `copilot` here and approve the `project:buddy` extension's request to
+register activity hooks. Declining leaves the footer animation working but
+disables commands and activity reactions. Enable **custom** in `/statusline` if
+hidden. Restart after installing or updating the extension if commands are absent.
 
-You can also use:
+| Command | Effect |
+| --- | --- |
+| `/buddy` or `/buddy show` | Show the character card |
+| `/buddy pet` | Head pats and a happy expression |
+| `/buddy reward` | Give one cookie, save the count, and show a chewing reaction |
+| `/buddy motion off` / `/buddy motion on` | Freeze/resume blinking and bouncing |
+| `/buddy reseed` | Replace character traits and stats with your hash-derived character |
+
+The same actions work without Copilot:
 
 ```sh
 node buddy.mjs show
+node buddy.mjs reward
 node buddy.mjs pet
 node buddy.mjs motion off
-node buddy.mjs motion on
-node buddy.mjs reroll
+node buddy.mjs reseed
 npm test
 ```
 
-`reroll` explicitly replaces your character. Saves live in `.buddy/character.json`
-(ignored by Git). Activity files under `.buddy/sessions/` are isolated per Copilot
-session and expire into idle visually. Invalid saves report an error rather than
-silently replacing your buddy.
+Natural-language requests such as "give my buddy a cookie" use the same local
+actions through the `terminal_buddy` tool. Slash commands and standalone commands
+run locally without an LLM turn. `reroll` remains an alias for `reseed`; it now
+returns the same hash-derived character, not a fresh random roll.
 
-The status command expects Copilot's JSON on stdin:
+## Your identity, your character
 
-```sh
-printf '{"session_id":"demo"}' | node buddy.mjs status
-```
+New characters are derived from a SHA-256 hash of a namespaced local identity:
+hostname, OS username, home directory, and user ID. This identifies a local
+user account, **not** a verified person or portable GitHub identity. The same
+account on the same machine produces the same character across project copies.
+Renaming the account/machine or moving its home changes future seed derivation;
+existing saves stay unchanged.
 
-## Small implementation plan
+Raw identity fields are never saved, logged, or sent anywhere. Only the hash is
+stored. It is a pseudonymous seed, not a secret or authentication credential.
+Copying it reproduces the generated character. Labelled SHA-256 derivations
+independently determine name, class, personality, stats, rarity, and appearance;
+time, model output, and cookies do not affect those traits.
+Color uses its own derivation from that same saved seed, selecting blue, cyan,
+green, magenta, yellow, or red without changing any other generated traits.
+Older unseeded characters retain blue.
 
-1. Generate and atomically save one character, with independent 1-100 stats and
-   weighted rarities (common 50%, uncommon 28%, rare 15%, epic 6%, legendary 1%).
-2. Render fixed-size plain ASCII frames beside stats. Blink and bounce once per
-   second using Copilot's own repaint loop; never move the cursor ourselves.
-3. Use extension hooks for working, success, and failure reactions, and a tool for
-   showing/petting the character or switching motion off.
+Each personality has 18 authored lines across idle, working, success, worry,
+petting, and cookie reactions (72 lines total). Curious buddies investigate;
+sleepy buddies conserve energy; sassy buddies offer opinions; brave buddies
+treat debugging as an adventure. The footer rotates within the current
+personality/mood every 30 seconds, with a seed-derived starting line. Reduced
+motion freezes dialogue rotation too. No generated text or model calls are used.
 
-## What the article taught us
+Five stats range from 1 to 100. Rarity weights are common 50%, uncommon 28%,
+rare 15%, epic 6%, legendary 1%. Appearance offers **1,280 combinations**:
 
-[GitHub's banner engineering article](https://github.blog/engineering/from-pixels-to-characters-the-engineering-behind-github-copilot-clis-animated-ascii-banner/)
-explains why terminal animation is more than printing frames: there is no canvas,
-repaints can flicker, colors depend on terminal themes, and rapid updates can
-overwhelm screen readers. Its useful pattern is to separate frame content, timing,
-and presentation, and leave rendering ownership with the host.
+| Part | Variants |
+| --- | --- |
+| Hat | Top hat, crown, wizard hat, beanie, bare head |
+| Eyes | Round, dots, wide, sleepy |
+| Nose | Dot, triangle, button, none |
+| Mouth | Smile, grin, flat, cat |
+| Extra | Monocle and chain, facial scar, freckles, none |
 
-Buddy uses that pattern without copying GitHub's mascot or 6,000-line animation
-pipeline. Its ASCII sprite uses theme-adjustable ANSI bright blue; stats retain
-the host's text color. Set `NO_COLOR=1` or `TERM=dumb` for monochrome output.
-Redirected standalone cards stay monochrome. Copilot handles drawing: no cursor
-hiding, full-screen clearing, React, or timer process is necessary.
+Your existing version-1 buddy is automatically upgraded **without changing its
+name, stats, personality, top hat, or monocle**. The original is backed up as
+`.buddy/character.json.v1-backup`. Its seed is `null` because those old random
+stats cannot honestly be attributed to a hash. Use `/buddy reseed` to opt into
+the new deterministic character. Reseeding preserves cookies and motion settings.
 
-**Limits:** This is a seven-line footer pet, not a replacement for Copilot's
-built-in mascot or a native `/buddy` command. The supported refresh interval is a
-whole second, so motion is intentionally gentle rather than fluid. The setup
-stores an absolute script path in user settings; rerun setup if you move this
-folder. Native custom slash commands are not registered by this extension; ask
-in natural language instead.
+## Persistence and rendering
 
-Animation is enabled by the explicit status-line setup above.
-For reduced motion, run `node buddy.mjs motion off`. For screen readers, also
-disable the custom footer item with `/statusline`: motion-off freezes frames but
-does not remove decorative ASCII or changing mood text.
+Saves live in ignored `.buddy/character.json`. Invalid saves fail visibly rather
+than silently replacing your character. Atomic writes avoid partial saves.
+Mutating interactions use a lock so concurrent sessions cannot silently overwrite
+each other's cookies or preferences; a conflicting command reports "busy" and
+should be retried. If a process crashes mid-interaction, remove the empty
+`.buddy/interaction.lock` directory after confirming no interaction is running.
 
-To uninstall the footer, remove `statusLine.command` from user settings (or restore
-your previous command and refresh interval). Delete this project's
-`.github/extensions/buddy/` directory to remove the extension.
+Activity files in `.buddy/sessions/` isolate moods per session. Busy expires after
+two minutes, other reactions after eight seconds; idle events settle working
+expressions. Cookie counts are permanent until you edit/delete the save; they
+do not boost generated stats. New characters start with **zero** cookies; only
+an explicit reward action increments the count. Showing, petting, animation,
+and dialogue never grant cookies.
+
+The sprite is **16 columns by 6 rows**, beside the stats, with one line of
+personality/cookie text. Wider than the original, but the same seven-line footer
+height. The extra columns make the nose and accessories readable without losing
+the blink and bounce.
+
+**Per-buddy font size is not available.** Terminals use a shared character grid;
+ANSI colors do not change font size for one region. Zooming a pane changes
+everything in that pane. More ASCII detail requires more cells. Graphics or
+Unicode half-blocks could increase apparent resolution, but would no longer be
+this portable ASCII-only renderer.
+
+Seeded colors use the terminal's theme-adjustable ANSI palette; stats retain the
+host's text color. Set `NO_COLOR=1` or `TERM=dumb` for monochrome. Redirected
+standalone cards stay monochrome. Extension cards are plain text.
+Timeline cards use fenced `text` blocks so Markdown does not interpret facial
+features, backslashes, or underscores as emphasis, escapes, or other formatting.
+
+Animation advances at Copilot's supported one-second refresh interval, not video
+frame rates. For reduced motion use `/buddy motion off`. For screen readers,
+also disable the custom item in `/statusline`: freezing frames does not remove
+decorative ASCII or mood updates.
+
+## Article digest and implementation
+
+[GitHub's ASCII-banner article](https://github.blog/engineering/from-pixels-to-characters-the-engineering-behind-github-copilot-clis-animated-ascii-banner/)
+highlights the lack of a terminal canvas, inconsistent repainting and colors, and
+the need for accessibility controls. Its reusable idea is to separate frame
+content, timing, and presentation, leaving drawing to the host.
+
+Buddy follows that pattern with a small local implementation: derive and save a
+character, compose fixed-size trait sprites, let Copilot repaint them, and wire
+commands/tool hooks to shared interaction logic. No React, cursor movement,
+screen clearing, animation service, or reproduction of GitHub's mascot.
+
+To uninstall, remove `statusLine.command` from user settings (or restore your
+previous configuration) and remove `.github/extensions/buddy/`. If you move this
+folder, update the absolute script path in user settings.
