@@ -1,0 +1,13 @@
+{
+  "name": "cli-buddy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "buddy": "node buddy.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
